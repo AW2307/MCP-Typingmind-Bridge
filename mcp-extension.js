@@ -124,6 +124,8 @@ function displayError(message) {
 async function syncMCPPlugins() {
     try {
         const mcpBridgeURL = await getMCPBridgeURL();
+        console.log(`MCP Extension: Using bridge URL: ${mcpBridgeURL}`);
+        
         const response = await globalThis.fetch(`${mcpBridgeURL}/mcp/tools`);
         if (!response.ok) {
             throw new Error(`Failed to fetch MCP tools: ${response.statusText}`);
@@ -343,44 +345,78 @@ function showSettingsPanel() {
     document.body.appendChild(panel);
 }
 
-// Create settings button
+// IMPROVED: Create settings button that's more visible and reliably injected
 function createSettingsButton() {
+    // Remove any existing button first
     const existingButton = document.querySelector('[data-mcp-extension-settings-button]');
     if (existingButton) existingButton.remove();
     
-    const button = document.createElement('button');
+    const button = document.createElement('div'); // Using div instead of button for better styling control
     button.setAttribute('data-mcp-extension-settings-button', '');
-    button.textContent = '⚙️';
+    button.innerHTML = '⚙️'; // Using gear emoji
     button.title = 'MCP Extension Settings';
     button.style.cssText = `
         position: fixed;
-        bottom: 20px;
+        bottom: 80px;
         left: 20px;
-        width: 40px;
-        height: 40px;
+        width: 50px;
+        height: 50px;
         background: #007bff;
         color: white;
         border: none;
         border-radius: 50%;
-        font-size: 20px;
+        font-size: 28px;
         cursor: pointer;
-        z-index: 9998;
+        z-index: 9999999;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+        user-select: none;
+        text-align: center;
+        line-height: 50px;
     `;
-    button.onclick = showSettingsPanel;
+    
+    // Make sure it's clickable
+    button.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('MCP Extension: Settings button clicked');
+        showSettingsPanel();
+    });
+    
+    // Add to DOM
     document.body.appendChild(button);
+    console.log('MCP Extension: Settings button created and added to DOM');
 }
 
-// Initialize the extension
+// Initialize the extension with improved DOM loading logic
 function initMCPExtension() {
     console.log('MCP Extension initializing...');
+    
+    // Create the settings button immediately
     createSettingsButton();
+    
+    // Also try again when DOM is fully loaded to ensure it's visible
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('MCP Extension: DOM loaded, ensuring button exists');
+            createSettingsButton();
+        });
+    }
+    
+    // Sync plugins
     syncMCPPlugins().catch(err => {
         displayError(`Initialization failed: ${err.message}`);
     });
+    
+    // Ensure button stays visible by periodically checking
+    setInterval(() => {
+        if (!document.querySelector('[data-mcp-extension-settings-button]')) {
+            console.log('MCP Extension: Settings button missing, recreating...');
+            createSettingsButton();
+        }
+    }, 5000);
 }
 
 // Start the extension
