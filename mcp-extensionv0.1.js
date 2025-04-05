@@ -1,5 +1,5 @@
 // MCP Bridge configuration
-const MCP_BRIDGE_URL = 'http://localhost:8000';
+const MCP_BRIDGE_URL = 'https://globe-sam-expired-an.trycloudflare.com::JL5e78VuqqN2LNTln4ewOi3DzDWiDp3U';
 
 // Utility functions for IndexedDB operations
 const DB_NAME = 'keyval-store';
