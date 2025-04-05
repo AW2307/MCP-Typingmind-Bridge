@@ -1,4 +1,4 @@
-// MCP Bridge configuration
+// MCP Bridge configuration - changed from constant to configurable setting
 const MCP_BRIDGE_URL_KEY = 'MCP_BRIDGE_URL';
 const DEFAULT_MCP_BRIDGE_URL = 'http://localhost:8000';
 
@@ -55,7 +55,7 @@ async function saveMCPBridgeURL(url) {
 
 async function getPlugins() {
     try {
-        const db = await getDB();
+        const db = await getDB(); 
         return new Promise((resolve, reject) => {
             const transaction = db.transaction(STORE_NAME, 'readonly');
             const store = transaction.objectStore(STORE_NAME);
@@ -237,230 +237,333 @@ async function updateMCPPlugins(mcpToolsData, mcpBridgeURL) {
     }
 }
 
-// Show MCP settings panel
-function showMCPSettingsPanel() {
-    const settingsPanel = document.createElement('div');
-    settingsPanel.id = 'mcp-settings-panel';
-    settingsPanel.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50';
+// Create a floating button for MCP settings
+function createMCPFloatingButton() {
+    // Check if button already exists
+    if (document.getElementById('mcp-settings-button')) {
+        return;
+    }
     
-    settingsPanel.innerHTML = `
-        <div class="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-lg max-w-lg w-full max-h-[80vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold text-slate-900 dark:text-white">MCP Extension Settings</h2>
-                <button id="mcp-close-settings" class="text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-white">
-                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    // Create the button element
+    const floatingButton = document.createElement('div');
+    floatingButton.id = 'mcp-settings-button';
+    floatingButton.className = 'fixed bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2 cursor-pointer transform z-50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all';
+    floatingButton.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-slate-900 dark:text-white">
+            <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <span class="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">M</span>
+    `;
+    
+    // Add tooltip
+    floatingButton.title = "MCP Settings";
+    
+    // Position in the bottom right (with some padding for mobile)
+    floatingButton.style.right = '20px';
+    floatingButton.style.bottom = '80px';
+    
+    // Make it draggable
+    let isDragging = false;
+    let offsetX, offsetY;
+    
+    floatingButton.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        offsetX = e.clientX - floatingButton.getBoundingClientRect().left;
+        offsetY = e.clientY - floatingButton.getBoundingClientRect().top;
+        floatingButton.style.cursor = 'grabbing';
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        const x = e.clientX - offsetX;
+        const y = e.clientY - offsetY;
+        
+        // Keep button within viewport bounds
+        const maxX = window.innerWidth - floatingButton.offsetWidth;
+        const maxY = window.innerHeight - floatingButton.offsetHeight;
+        
+        floatingButton.style.right = 'auto';
+        floatingButton.style.left = `${Math.max(0, Math.min(x, maxX))}px`;
+        floatingButton.style.bottom = 'auto';
+        floatingButton.style.top = `${Math.max(0, Math.min(y, maxY))}px`;
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            floatingButton.style.cursor = 'pointer';
+        }
+    });
+    
+    // Handle click to open settings
+    floatingButton.addEventListener('click', () => {
+        if (!isDragging) {
+            showMCPSettingsModal();
+        }
+    });
+    
+    // Append to body
+    document.body.appendChild(floatingButton);
+    console.log('MCP Settings button added to page');
+}
+
+// Create and show the settings modal
+async function showMCPSettingsModal() {
+    // Check if modal already exists
+    const existingModal = document.getElementById('mcp-settings-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Create the modal container
+    const modal = document.createElement('div');
+    modal.id = 'mcp-settings-modal';
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]';
+    
+    // Get current URL
+    const currentUrl = await getMCPBridgeURL();
+    
+    // Create the modal content
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                    <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                        <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                    MCP Settings
+                </h3>
+                <button id="mcp-close-modal" class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
-            
-            <div class="space-y-4">
-                <div>
-                    <label for="mcp-bridge-url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">MCP Bridge URL</label>
-                    <input 
-                        type="text" 
-                        id="mcp-bridge-url" 
-                        class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                        placeholder="${DEFAULT_MCP_BRIDGE_URL}"
-                    >
+            <div class="p-4">
+                <div class="mb-4">
+                    <label for="mcp-bridge-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        MCP Bridge URL
+                    </label>
+                    <input type="text" id="mcp-bridge-url" 
+                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                        placeholder="${DEFAULT_MCP_BRIDGE_URL}" 
+                        value="${currentUrl}">
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        Enter the URL to your MCP Bridge server
+                    </p>
                 </div>
                 
-                <div class="flex gap-2">
-                    <button id="mcp-test-connection" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                <div class="mb-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Connected Plugins: <span id="mcp-plugin-count">Loading...</span>
+                        </span>
+                        <button id="mcp-sync-plugins" class="text-sm text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center">
+                            <svg class="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                            </svg>
+                            Sync Now
+                        </button>
+                    </div>
+                    <div id="mcp-connection-status" class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        Checking connection...
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
+                    <button id="mcp-test-connection" class="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-100 dark:hover:bg-blue-800 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                         Test Connection
                     </button>
-                    <button id="mcp-save-url" class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
-                        Save
+                    <button id="mcp-save-settings" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Save Settings
                     </button>
-                </div>
-                
-                <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
-                    <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-2">Plugin Management</h3>
-                    <button id="mcp-sync-plugins" class="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                        Sync MCP Plugins
-                    </button>
-                </div>
-                
-                <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
-                    <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-2">About</h3>
-                    <p class="text-sm text-slate-600 dark:text-slate-400">
-                        MCP Extension connects TypingMind to your local MCP Bridge server, enabling access to your custom tools and plugins.
-                    </p>
                 </div>
             </div>
         </div>
     `;
     
-    document.body.appendChild(settingsPanel);
-    
-    // Load current URL
-    getMCPBridgeURL().then(url => {
-        const input = document.getElementById('mcp-bridge-url');
-        if (input) input.value = url;
-    });
+    // Append to body
+    document.body.appendChild(modal);
     
     // Add event listeners
-    document.getElementById('mcp-close-settings').addEventListener('click', () => {
-        settingsPanel.remove();
+    document.getElementById('mcp-close-modal').addEventListener('click', () => {
+        modal.remove();
     });
     
+    // Close when clicking outside the modal
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+    
+    // Test connection button
     document.getElementById('mcp-test-connection').addEventListener('click', async () => {
         const urlInput = document.getElementById('mcp-bridge-url');
-        const url = urlInput.value.trim();
+        const url = urlInput.value.trim() || DEFAULT_MCP_BRIDGE_URL;
+        const statusDiv = document.getElementById('mcp-connection-status');
         
-        if (!url) {
-            displayError('URL cannot be empty');
-            return;
-        }
+        statusDiv.textContent = 'Testing connection...';
+        statusDiv.className = 'mt-2 text-sm text-blue-600 dark:text-blue-400';
         
         try {
             const response = await fetch(`${url}/mcp/tools`);
             if (!response.ok) {
                 throw new Error(`Failed to connect: ${response.statusText}`);
             }
-            displayToast('Connection successful!');
+            
+            const data = await response.json();
+            const toolCount = Object.values(data).reduce((count, category) => 
+                count + (category.tools?.length || 0), 0);
+            
+            statusDiv.textContent = `Connection successful! Found ${toolCount} tools.`;
+            statusDiv.className = 'mt-2 text-sm text-green-600 dark:text-green-400';
         } catch (error) {
-            displayError(`Connection failed: ${error.message}`);
+            statusDiv.textContent = `Connection failed: ${error.message}`;
+            statusDiv.className = 'mt-2 text-sm text-red-600 dark:text-red-400';
         }
     });
     
-    document.getElementById('mcp-save-url').addEventListener('click', async () => {
+    // Save settings button
+    document.getElementById('mcp-save-settings').addEventListener('click', async () => {
         const urlInput = document.getElementById('mcp-bridge-url');
-        const url = urlInput.value.trim();
-        
-        if (!url) {
-            displayError('URL cannot be empty');
-            return;
-        }
+        const url = urlInput.value.trim() || DEFAULT_MCP_BRIDGE_URL;
         
         try {
             await saveMCPBridgeURL(url);
-            displayToast('URL saved successfully');
+            await syncMCPPlugins();
+            
+            // Show success message
+            const statusDiv = document.getElementById('mcp-connection-status');
+            statusDiv.textContent = 'Settings saved successfully!';
+            statusDiv.className = 'mt-2 text-sm text-green-600 dark:text-green-400';
+            
+            // Close modal after a short delay
+            setTimeout(() => {
+                modal.remove();
+            }, 1500);
         } catch (error) {
-            displayError(`Failed to save URL: ${error.message}`);
+            const statusDiv = document.getElementById('mcp-connection-status');
+            statusDiv.textContent = `Error saving settings: ${error.message}`;
+            statusDiv.className = 'mt-2 text-sm text-red-600 dark:text-red-400';
         }
     });
     
-    document.getElementById('mcp-sync-plugins').addEventListener('click', () => {
-        syncMCPPlugins();
+    // Sync plugins button
+    document.getElementById('mcp-sync-plugins').addEventListener('click', async () => {
+        const statusDiv = document.getElementById('mcp-connection-status');
+        statusDiv.textContent = 'Syncing plugins...';
+        statusDiv.className = 'mt-2 text-sm text-blue-600 dark:text-blue-400';
+        
+        try {
+            await syncMCPPlugins();
+            
+            // Update plugin count
+            updatePluginCount();
+            
+            statusDiv.textContent = 'Plugins synced successfully!';
+            statusDiv.className = 'mt-2 text-sm text-green-600 dark:text-green-400';
+        } catch (error) {
+            statusDiv.textContent = `Sync failed: ${error.message}`;
+            statusDiv.className = 'mt-2 text-sm text-red-600 dark:text-red-400';
+        }
     });
+    
+    // Update plugin count on load
+    updatePluginCount();
+    
+    // Check connection status
+    checkConnectionStatus();
 }
 
-// Add the settings button to the workspace tabs
-function addSettingsButtonToWorkspace() {
-    // We'll insert MCP settings directly into the settings menu
+// Helper function to update plugin count in the modal
+async function updatePluginCount() {
+    const countElement = document.getElementById('mcp-plugin-count');
+    if (!countElement) return;
     
-    // First, find all the tabs in the workspace
-    const tabs = document.querySelectorAll('button[data-element-id^="workspace-tab-"]');
-    
-    // Find the settings tab specifically
-    const settingsTab = Array.from(tabs).find(tab => 
-        tab.getAttribute('data-element-id') === 'workspace-tab-settings'
-    );
-    
-    // If no settings tab, we can't add our entry
-    if (!settingsTab) {
-        console.error('MCP Extension: Settings tab not found');
-        return false;
+    try {
+        const plugins = await getPlugins();
+        const mcpPlugins = plugins.filter(p => p.id?.startsWith('mcp_'));
+        countElement.textContent = `${mcpPlugins.length} plugins`;
+    } catch (error) {
+        countElement.textContent = 'Error loading plugins';
     }
-    
-    // Let's try something different - add a new button directly after the Settings tab
-    const mcpButton = document.createElement('button');
-    mcpButton.setAttribute('data-element-id', 'workspace-tab-mcp');
-    mcpButton.className = settingsTab.className;
-    mcpButton.innerHTML = `
-        <span class="text-white/70 hover:bg-white/20 self-stretch h-12 md:h-[50px] px-0.5 py-1.5 rounded-xl flex-col justify-start items-center gap-1.5 flex transition-colors">
-            <svg class="w-4 h-4 flex-shrink-0" width="18px" height="18px" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-                <g fill="currentColor">
-                    <path d="M6,9.00002C6,10.65,7.35,12,9,12C10.65,12,12,10.65,12,9.00002C12,7.35002,10.65,6.00002,9,6.00002C7.35,6.00002,6,7.35002,6,9.00002ZM7.5,9.00002C7.5,8.17002,8.17,7.50002,9,7.50002C9.83,7.50002,10.5,8.17002,10.5,9.00002C10.5,9.83002,9.83,10.5,9,10.5C8.17,10.5,7.5,9.83002,7.5,9.00002Z" fill="currentColor"/>
-                    <path d="M8.65002,17H9.36002L9.37002,16.99C10.27,16.99,11.01,16.32,11.11,15.43L11.18,14.78L11.57,14.62L12.08,15.03C12.78,15.59,13.78,15.53,14.41,14.9L14.91,14.4C15.54,13.77,15.6,12.77,15.04,12.07L14.63,11.56L14.79,11.16L15.44,11.09C16.33,10.99,17,10.24,17,9.35001V8.64001C17,7.75001,16.33,7.00001,15.44,6.90001L14.79,6.83001L14.63,6.44001L15.04,5.93001C15.6,5.23001,15.54,4.23001,14.91,3.60001L14.41,3.10001C13.78,2.47001,12.78,2.41001,12.08,2.97001L11.57,3.38001L11.18,3.22001L11.11,2.57001C11.01,1.68001,10.26,1.01001,9.37002,1.01001H8.66002C7.77002,1.01001,7.02002,1.68001,6.92002,2.57001L6.85002,3.22001L6.45002,3.38001L5.94002,2.97001C5.24002,2.41001,4.24002,2.47001,3.61002,3.10001L3.11002,3.60001C2.48002,4.23001,2.42002,5.23001,2.98002,5.93001L3.39002,6.44001L3.23002,6.84001L2.58002,6.91001C1.69002,7.01001,1.02002,7.76001,1.02002,8.65001V9.36001C1.02002,10.26,1.69002,11,2.58002,11.1L3.23002,11.17L3.39002,11.57L2.98002,12.08C2.42002,12.78,2.48002,13.78,3.11002,14.41L3.61002,14.91C4.24002,15.54,5.24002,15.6,5.94002,15.04L6.45002,14.63L6.84002,14.79L6.91002,15.44C7.01002,16.33,7.76002,17,8.65002,17ZM6.61002,13.08C6.51002,13.04,6.42002,13.02,6.32002,13.02V13.01C6.15002,13.01,5.99002,13.07,5.85002,13.18L4.99002,13.87C4.89002,13.95,4.75002,13.94,4.66002,13.85L4.16002,13.35C4.07002,13.26,4.06002,13.12,4.14002,13.02L4.83002,12.16C5.00002,11.94,5.04002,11.65,4.94002,11.4L4.44002,10.19C4.34002,9.94001,4.10002,9.76001,3.83002,9.73001L2.74002,9.61001C2.62002,9.59001,2.52002,9.49001,2.52002,9.36001V8.65001C2.52002,8.52001,2.61002,8.41001,2.74002,8.40001L3.83002,8.28001C4.10002,8.25001,4.34002,8.07001,4.44002,7.82001L4.94002,6.61001C5.04002,6.35001,5.00002,6.06001,4.83002,5.85001L4.14002,4.99001C4.06002,4.89001,4.07002,4.75001,4.16002,4.66001L4.66002,4.16001C4.75002,4.07001,4.89002,4.06001,4.99002,4.14001L5.85002,4.83001C6.07002,5.00001,6.36002,5.05001,6.61002,4.94001L7.82002,4.44001C8.07002,4.34001,8.25002,4.10001,8.28002,3.83001L8.40002,2.74001C8.42002,2.62001,8.52002,2.52001,8.65002,2.52001H9.36002C9.49002,2.52001,9.60002,2.61001,9.61002,2.74001L9.73002,3.83001C9.76002,4.10001,9.94002,4.34001,10.19,4.44001L11.4,4.94001C11.66,5.04001,11.95,5.00001,12.16,4.83001L13.02,4.14001C13.12,4.06001,13.26,4.07001,13.35,4.16001L13.85,4.66001C13.94,4.75001,13.95,4.89001,13.87,4.99001L13.18,5.85001C13.01,6.07001,12.97,6.36001,13.07,6.61001L13.57,7.82001C13.68,8.07001,13.91,8.25001,14.18,8.28001L15.27,8.40001C15.39,8.42001,15.49,8.52001,15.49,8.65001V9.39001C15.48,9.50001,15.39,9.60001,15.27,9.61001L14.18,9.73001C13.91,9.76001,13.68,9.94001,13.57,10.19L13.07,11.4C12.97,11.66,13.01,11.95,13.18,12.16L13.87,13.02C13.95,13.12,13.94,13.26,13.85,13.35L13.35,13.85C13.26,13.94,13.12,13.95,13.02,13.87L12.16,13.18C11.94,13.01,11.65,12.97,11.4,13.07L10.19,13.57C9.94002,13.68,9.76002,13.91,9.73002,14.18L9.61002,15.28C9.59002,15.4,9.49002,15.5,9.36002,15.5H8.65002C8.52002,15.5,8.41002,15.41,8.40002,15.28L8.28002,14.19C8.25002,13.92,8.07002,13.69,7.82002,13.58L6.61002,13.08Z" fill="currentColor"/>
-                </g>
-            </svg>
-            <span class="font-normal self-stretch text-center text-xs leading-4 md:leading-none">MCP</span>
-        </span>
-    `;
-    
-    // Add click event to the button
-    mcpButton.addEventListener('click', showMCPSettingsPanel);
-    
-    // Insert the button after the settings tab
-    const parentElement = settingsTab.parentElement;
-    if (!parentElement) {
-        console.error('MCP Extension: Parent element not found');
-        return false;
-    }
-    
-    // Insert before the Settings button
-    parentElement.insertBefore(mcpButton, settingsTab);
-    
-    console.log('MCP Extension: Settings button added successfully');
-    return true;
 }
 
-// Add settings button to the bottom panel (alternative approach)
-function addSettingsButtonToBottomPanel() {
-    // Find the cloud sync button as a reference point
-    const cloudSyncButton = document.querySelector('[data-element-id="cloud-sync-button"]');
-    if (!cloudSyncButton) {
-        console.error('MCP Extension: Cloud sync button not found');
-        return false;
+// Helper function to check connection status
+async function checkConnectionStatus() {
+    const statusDiv = document.getElementById('mcp-connection-status');
+    if (!statusDiv) return;
+    
+    try {
+        const url = await getMCPBridgeURL();
+        const response = await fetch(`${url}/mcp/tools`);
+        
+        if (!response.ok) {
+            throw new Error(`Connection error: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const toolCount = Object.values(data).reduce((count, category) => 
+            count + (category.tools?.length || 0), 0);
+        
+        statusDiv.textContent = `Connected to MCP Bridge. ${toolCount} tools available.`;
+        statusDiv.className = 'mt-2 text-sm text-green-600 dark:text-green-400';
+    } catch (error) {
+        statusDiv.textContent = `Not connected: ${error.message}`;
+        statusDiv.className = 'mt-2 text-sm text-red-600 dark:text-red-400';
     }
-    
-    // Create a new button similar to cloud sync button
-    const mcpButton = document.createElement('button');
-    mcpButton.setAttribute('data-element-id', 'mcp-settings-button');
-    mcpButton.className = cloudSyncButton.className;
-    mcpButton.innerHTML = `
-        <span class="block group-hover:bg-white/30 w-[35px] h-[35px] transition-all rounded-lg flex items-center justify-center group-hover:text-white/90">
-            <svg class="w-6 h-6 flex-shrink-0" width="24px" height="24px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <g fill="currentColor">
-                    <path d="M6,9.00002C6,10.65,7.35,12,9,12C10.65,12,12,10.65,12,9.00002C12,7.35002,10.65,6.00002,9,6.00002C7.35,6.00002,6,7.35002,6,9.00002ZM7.5,9.00002C7.5,8.17002,8.17,7.50002,9,7.50002C9.83,7.50002,10.5,8.17002,10.5,9.00002C10.5,9.83002,9.83,10.5,9,10.5C8.17,10.5,7.5,9.83002,7.5,9.00002Z" fill="currentColor"/>
-                    <path d="M8.65002,17H9.36002L9.37002,16.99C10.27,16.99,11.01,16.32,11.11,15.43L11.18,14.78L11.57,14.62L12.08,15.03C12.78,15.59,13.78,15.53,14.41,14.9L14.91,14.4C15.54,13.77,15.6,12.77,15.04,12.07L14.63,11.56L14.79,11.16L15.44,11.09C16.33,10.99,17,10.24,17,9.35001V8.64001C17,7.75001,16.33,7.00001,15.44,6.90001L14.79,6.83001L14.63,6.44001L15.04,5.93001C15.6,5.23001,15.54,4.23001,14.91,3.60001L14.41,3.10001C13.78,2.47001,12.78,2.41001,12.08,2.97001L11.57,3.38001L11.18,3.22001L11.11,2.57001C11.01,1.68001,10.26,1.01001,9.37002,1.01001H8.66002C7.77002,1.01001,7.02002,1.68001,6.92002,2.57001L6.85002,3.22001L6.45002,3.38001L5.94002,2.97001C5.24002,2.41001,4.24002,2.47001,3.61002,3.10001L3.11002,3.60001C2.48002,4.23001,2.42002,5.23001,2.98002,5.93001L3.39002,6.44001L3.23002,6.84001L2.58002,6.91001C1.69002,7.01001,1.02002,7.76001,1.02002,8.65001V9.36001C1.02002,10.26,1.69002,11,2.58002,11.1L3.23002,11.17L3.39002,11.57L2.98002,12.08C2.42002,12.78,2.48002,13.78,3.11002,14.41L3.61002,14.91C4.24002,15.54,5.24002,15.6,5.94002,15.04L6.45002,14.63L6.84002,14.79L6.91002,15.44C7.01002,16.33,7.76002,17,8.65002,17ZM6.61002,13.08C6.51002,13.04,6.42002,13.02,6.32002,13.02V13.01C6.15002,13.01,5.99002,13.07,5.85002,13.18L4.99002,13.87C4.89002,13.95,4.75002,13.94,4.66002,13.85L4.16002,13.35C4.07002,13.26,4.06002,13.12,4.14002,13.02L4.83002,12.16C5.00002,11.94,5.04002,11.65,4.94002,11.4L4.44002,10.19C4.34002,9.94001,4.10002,9.76001,3.83002,9.73001L2.74002,9.61001C2.62002,9.59001,2.52002,9.49001,2.52002,9.36001V8.65001C2.52002,8.52001,2.61002,8.41001,2.74002,8.40001L3.83002,8.28001C4.10002,8.25001,4.34002,8.07001,4.44002,7.82001L4.94002,6.61001C5.04002,6.35001,5.00002,6.06001,4.83002,5.85001L4.14002,4.99001C4.06002,4.89001,4.07002,4.75001,4.16002,4.66001L4.66002,4.16001C4.75002,4.07001,4.89002,4.06001,4.99002,4.14001L5.85002,4.83001C6.07002,5.00001,6.36002,5.05001,6.61002,4.94001L7.82002,4.44001C8.07002,4.34001,8.25002,4.10001,8.28002,3.83001L8.40002,2.74001C8.42002,2.62001,8.52002,2.52001,8.65002,2.52001H9.36002C9.49002,2.52001,9.60002,2.61001,9.61002,2.74001L9.73002,3.83001C9.76002,4.10001,9.94002,4.34001,10.19,4.44001L11.4,4.94001C11.66,5.04001,11.95,5.00001,12.16,4.83001L13.02,4.14001C13.12,4.06001,13.26,4.07001,13.35,4.16001L13.85,4.66001C13.94,4.75001,13.95,4.89001,13.87,4.99001L13.18,5.85001C13.01,6.07001,12.97,6.36001,13.07,6.61001L13.57,7.82001C13.68,8.07001,13.91,8.25001,14.18,8.28001L15.27,8.40001C15.39,8.42001,15.49,8.52001,15.49,8.65001V9.39001C15.48,9.50001,15.39,9.60001,15.27,9.61001L14.18,9.73001C13.91,9.76001,13.68,9.94001,13.57,10.19L13.07,11.4C12.97,11.66,13.01,11.95,13.18,12.16L13.87,13.02C13.95,13.12,13.94,13.26,13.85,13.35L13.35,13.85C13.26,13.94,13.12,13.95,13.02,13.87L12.16,13.18C11.94,13.01,11.65,12.97,11.4,13.07L10.19,13.57C9.94002,13.68,9.76002,13.91,9.73002,14.18L9.61002,15.28C9.59002,15.4,9.49002,15.5,9.36002,15.5H8.65002C8.52002,15.5,8.41002,15.41,8.40002,15.28L8.28002,14.19C8.25002,13.92,8.07002,13.69,7.82002,13.58L6.61002,13.08Z" fill="currentColor"/>
-                </g>
-            </svg>
-        </span>
-        <span class="font-normal self-stretch text-center text-xs leading-4 md:leading-none">MCP</span>
-    `;
-    
-    // Add click event to the button
-    mcpButton.addEventListener('click', showMCPSettingsPanel);
-    
-    // Insert after cloud sync button
-    cloudSyncButton.parentNode.insertBefore(mcpButton, cloudSyncButton.nextSibling);
-    
-    console.log('MCP Extension: Settings button added to bottom panel');
-    return true;
 }
 
-// Initialize the extension - try multiple approaches to ensure the button appears
+// Add keyboard shortcut to open settings (Ctrl+Shift+M)
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+        e.preventDefault();
+        showMCPSettingsModal();
+    }
+});
+
+// Initialize by creating the button and syncing plugins
 function initMCPExtension() {
     console.log('MCP Extension initializing...');
     
-    // Try to add MCP settings in different ways to increase chances of success
-    const attemptAddButtons = () => {
-        // Try workspace tabs first
-        if (document.querySelector('[data-element-id="workspace-tab-mcp"]')) {
-            return; // Already added
-        }
-        
-        // Try different approaches
-        const added = addSettingsButtonToWorkspace() || addSettingsButtonToBottomPanel();
-        
-        if (!added) {
-            console.log('MCP Extension: Could not add settings button, will retry');
-        }
-    };
+    // Try to add the floating button immediately
+    createMCPFloatingButton();
     
-    // Initial attempt
-    setTimeout(attemptAddButtons, 2000);
-    
-    // Retry periodically
-    setInterval(attemptAddButtons, 5000);
+    // Then check periodically to ensure it exists (in case of dynamic UI changes)
+    const buttonCheckInterval = setInterval(() => {
+        if (!document.getElementById('mcp-settings-button')) {
+            createMCPFloatingButton();
+        }
+    }, 5000);
     
     // Start syncing plugins
     syncMCPPlugins().catch(err => {
         displayError(`Initialization failed: ${err.message}`);
     });
+    
+    // Add some additional CSS for the button
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+        #mcp-settings-button {
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #mcp-settings-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        #mcp-settings-button:active {
+            transform: scale(0.95);
+        }
+        #mcp-settings-modal {
+            backdrop-filter: blur(2px);
+        }
+    `;
+    document.head.appendChild(styleElement);
 }
 
 // Start the extension
