@@ -1,5 +1,5 @@
 // MCP Bridge configuration
-const MCP_BRIDGE_URL = 'http://localhost:8000';
+const MCP_BRIDGE_URL = 'https://radius-organised-household-exactly.trycloudflare.com';
 
 // Utility functions for IndexedDB operations
 const DB_NAME = 'keyval-store';
