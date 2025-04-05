@@ -15,7 +15,7 @@ async function getDB() {
     });
 }
 
-// New function to get the MCP bridge URL from storage
+// Function to get the MCP bridge URL from storage
 async function getMCPBridgeURL() {
     try {
         const db = await getDB();
@@ -35,7 +35,7 @@ async function getMCPBridgeURL() {
     }
 }
 
-// New function to save the MCP bridge URL
+// Function to save the MCP bridge URL
 async function saveMCPBridgeURL(url) {
     try {
         const db = await getDB();
@@ -55,7 +55,8 @@ async function saveMCPBridgeURL(url) {
 
 async function getPlugins() {
     try {
-        const db = await getDB(); return new Promise((resolve, reject) => {
+        const db = await getDB();
+        return new Promise((resolve, reject) => {
             const transaction = db.transaction(STORE_NAME, 'readonly');
             const store = transaction.objectStore(STORE_NAME);
             const request = store.get(PLUGINS_KEY);
@@ -120,7 +121,7 @@ function displayError(message) {
     displayToast(message, 'error');
 }
 
-// Modified to use dynamic URL
+// Main plugin sync function
 async function syncMCPPlugins() {
     try {
         const mcpBridgeURL = await getMCPBridgeURL();
@@ -137,7 +138,7 @@ async function syncMCPPlugins() {
     }
 }
 
-// Modified to accept URL parameter
+// Plugin update logic
 async function updateMCPPlugins(mcpToolsData, mcpBridgeURL) {
     try {
         // Get current plugins
@@ -172,7 +173,6 @@ async function updateMCPPlugins(mcpToolsData, mcpBridgeURL) {
                     },
                     implementationType: "javascript",
                     outputType: "respond_to_ai",
-                    // Using dynamic URL in generated code
                     code: `async function ${pluginId}(data) {
     const url = '${mcpBridgeURL}/mcp/tools/${tool.name}/call';
     let body = data;
@@ -236,73 +236,217 @@ async function updateMCPPlugins(mcpToolsData, mcpBridgeURL) {
     }
 }
 
-// New settings UI
-function showSettingsPanel() {
-    // Remove any existing panel
-    const existingPanel = document.querySelector('[data-mcp-extension-settings]');
-    if (existingPanel) existingPanel.remove();
+// Function to create and insert MCP settings tab
+function createMCPSettingsTab() {
+    // Find the container element - look for the workspace tabs
+    const tabsContainer = document.querySelector('.min-w-max.h-full.w-full.flex.items-center.justify-start.gap-1.md\\:gap-2.md\\:flex-col');
+    if (!tabsContainer) {
+        console.error('MCP Extension: Could not find workspace tabs container');
+        return null;
+    }
     
-    const existingBackdrop = document.querySelector('[data-mcp-extension-backdrop]');
-    if (existingBackdrop) existingBackdrop.remove();
+    // Check if the MCP tab already exists
+    if (document.querySelector('[data-element-id="workspace-tab-mcp"]')) {
+        return document.querySelector('[data-element-id="workspace-tab-mcp"]');
+    }
+    
+    // Create a new tab button similar to the existing ones
+    const mcpTab = document.createElement('button');
+    mcpTab.setAttribute('data-element-id', 'workspace-tab-mcp');
+    mcpTab.className = 'min-w-[58px] sm:min-w-0 sm:aspect-auto aspect-square cursor-default h-12 md:h-[50px] flex-col justify-start items-start inline-flex focus:outline-0 focus:text-white w-full';
+    
+    // Tab content with icon and label
+    mcpTab.innerHTML = `
+        <span class="text-white/70 hover:bg-white/20 self-stretch h-12 md:h-[50px] px-0.5 py-1.5 rounded-xl flex-col justify-start items-center gap-1.5 flex transition-colors">
+            <svg class="w-4 h-4 flex-shrink-0" width="18px" height="18px" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                <g fill="currentColor">
+                    <path d="M6.5,5.5c-.828,0-1.5-.672-1.5-1.5s.672-1.5,1.5-1.5,1.5,.672,1.5,1.5-.672,1.5-1.5,1.5Z" fill="currentColor"></path>
+                    <path d="M11.5,15.5c-.828,0-1.5-.672-1.5-1.5s.672-1.5,1.5-1.5,1.5,.672,1.5,1.5-.672,1.5-1.5,1.5Z" fill="currentColor"></path>
+                    <path d="M11.5,5.5c-.828,0-1.5-.672-1.5-1.5s.672-1.5,1.5-1.5,1.5,.672,1.5,1.5-.672,1.5-1.5,1.5Z" fill="currentColor"></path>
+                    <path d="M6.5,15.5c-.828,0-1.5-.672-1.5-1.5s.672-1.5,1.5-1.5,1.5,.672,1.5,1.5-.672,1.5-1.5,1.5Z" fill="currentColor"></path>
+                    <line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" x1="6.5" x2="11.5" y1="4" y2="4"></line>
+                    <line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" x1="6.5" x2="11.5" y1="14" y2="14"></line>
+                    <line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" x1="5" x2="5" y1="5.5" y2="12.5"></line>
+                    <line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" x1="13" x2="13" y1="5.5" y2="12.5"></line>
+                </g>
+            </svg>
+            <span class="font-normal self-stretch text-center text-xs leading-4 md:leading-none">MCP</span>
+        </span>
+    `;
+    
+    // Find where to insert the tab - before the settings tab
+    const settingsTab = document.querySelector('[data-element-id="workspace-tab-settings"]');
+    if (settingsTab) {
+        tabsContainer.insertBefore(mcpTab, settingsTab);
+    } else {
+        // If settings tab not found, add to end
+        tabsContainer.appendChild(mcpTab);
+    }
+    
+    // Add click handler
+    mcpTab.addEventListener('click', () => {
+        // Show the MCP settings panel
+        showMCPSettingsPanel();
+        
+        // Make this tab active
+        document.querySelectorAll('[data-element-id^="workspace-tab-"]').forEach(tab => {
+            const span = tab.querySelector('span');
+            if (span) {
+                if (tab === mcpTab) {
+                    span.classList.remove('text-white/70');
+                    span.classList.add('text-white', 'bg-white/20');
+                } else {
+                    span.classList.remove('text-white', 'bg-white/20');
+                    span.classList.add('text-white/70');
+                }
+            }
+        });
+    });
+    
+    return mcpTab;
+}
+
+// Function to show the MCP settings panel
+function showMCPSettingsPanel() {
+    // Clean up any existing panel
+    const existingPanel = document.getElementById('mcp-settings-panel');
+    if (existingPanel) {
+        existingPanel.remove();
+    }
+    
+    // Get main content area
+    const mainContent = document.querySelector('[data-element-id="chat-space-middle-part"]');
+    if (!mainContent) {
+        console.error('MCP Extension: Could not find main content area');
+        return;
+    }
+    
+    // Store original content
+    if (!mainContent._originalContent) {
+        mainContent._originalContent = mainContent.innerHTML;
+    }
+    
+    // Clear content area
+    mainContent.innerHTML = '';
     
     // Create settings panel
     const panel = document.createElement('div');
-    panel.setAttribute('data-mcp-extension-settings', '');
-    panel.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: white;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        padding: 20px;
-        z-index: 10000;
-        box-shadow: 0 0 10px rgba(0,0,0,0.2);
-        width: 400px;
-        max-width: 90vw;
+    panel.id = 'mcp-settings-panel';
+    panel.className = 'flex flex-col w-full max-w-3xl mx-auto p-6';
+    
+    // Panel content
+    panel.innerHTML = `
+        <div class="flex items-center justify-between mb-8">
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">MCP Extension Settings</h1>
+            <button id="mcp-back-btn" class="px-3 py-1 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white rounded-md hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
+                Back to Chat
+            </button>
+        </div>
+        
+        <div class="space-y-6">
+            <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Bridge Connection</h2>
+                
+                <div class="space-y-2">
+                    <label for="mcp-bridge-url" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                        MCP Bridge URL
+                    </label>
+                    <input 
+                        type="text" 
+                        id="mcp-bridge-url" 
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="${DEFAULT_MCP_BRIDGE_URL}"
+                    />
+                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                        Enter the URL of your MCP Bridge server
+                    </p>
+                </div>
+                
+                <div class="mt-4 flex justify-end space-x-3">
+                    <button id="mcp-test-btn" class="px-3 py-1.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors">
+                        Test Connection
+                    </button>
+                    <button id="mcp-save-btn" class="px-3 py-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors">
+                        Save URL
+                    </button>
+                </div>
+            </div>
+            
+            <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Plugin Management</h2>
+                
+                <div class="space-y-2">
+                    <p class="text-sm text-slate-700 dark:text-slate-300">
+                        Sync MCP tools as plugins in TypingMind
+                    </p>
+                    <button id="mcp-sync-btn" class="w-full px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors">
+                        Sync Plugins
+                    </button>
+                </div>
+            </div>
+            
+            <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">About MCP Extension</h2>
+                
+                <div class="text-sm text-slate-700 dark:text-slate-300 space-y-2">
+                    <p>
+                        The MCP (Model Completion Protocol) extension allows you to connect TypingMind to custom tools and plugins through an MCP Bridge server.
+                    </p>
+                    <p>
+                        Visit <a href="https://github.com/ddh/mcp" class="text-blue-500 hover:underline" target="_blank">github.com/ddh/mcp</a> for more information.
+                    </p>
+                </div>
+            </div>
+        </div>
     `;
     
-    // Create header
-    const header = document.createElement('h2');
-    header.textContent = 'MCP Extension Settings';
-    header.style.cssText = 'margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;';
-    panel.appendChild(header);
+    mainContent.appendChild(panel);
     
-    // Create URL input
-    const urlLabel = document.createElement('label');
-    urlLabel.textContent = 'MCP Bridge URL:';
-    urlLabel.style.cssText = 'display: block; margin-bottom: 5px; font-weight: bold;';
-    panel.appendChild(urlLabel);
-    
-    const urlInput = document.createElement('input');
-    urlInput.type = 'text';
-    urlInput.style.cssText = 'width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px;';
-    panel.appendChild(urlInput);
-    
-    // Load current URL
+    // Get the URL from storage and set it
     getMCPBridgeURL().then(url => {
-        urlInput.value = url;
+        document.getElementById('mcp-bridge-url').value = url;
     });
     
-    // Create buttons
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = 'display: flex; justify-content: flex-end; gap: 10px;';
+    // Add event listeners
+    document.getElementById('mcp-back-btn').addEventListener('click', () => {
+        // Restore original content
+        if (mainContent._originalContent) {
+            mainContent.innerHTML = mainContent._originalContent;
+            delete mainContent._originalContent;
+        }
+        
+        // Highlight the chat tab
+        const chatTab = document.querySelector('[data-element-id="workspace-tab-chat"]');
+        if (chatTab) {
+            chatTab.click();
+        }
+    });
     
-    const cancelButton = document.createElement('button');
-    cancelButton.textContent = 'Cancel';
-    cancelButton.style.cssText = 'padding: 8px 16px; background: #f2f2f2; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;';
-    cancelButton.onclick = () => {
-        panel.remove();
-        document.querySelector('[data-mcp-extension-backdrop]')?.remove();
-    };
-    buttonContainer.appendChild(cancelButton);
+    document.getElementById('mcp-test-btn').addEventListener('click', async () => {
+        const urlInput = document.getElementById('mcp-bridge-url');
+        const url = urlInput.value.trim();
+        
+        if (!url) {
+            displayError('URL cannot be empty');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${url}/mcp/tools`);
+            if (!response.ok) {
+                throw new Error(`Failed to connect: ${response.statusText}`);
+            }
+            
+            displayToast('Connection successful!');
+        } catch (error) {
+            displayError(`Connection failed: ${error.message}`);
+        }
+    });
     
-    const saveButton = document.createElement('button');
-    saveButton.textContent = 'Save';
-    saveButton.style.cssText = 'padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;';
-    saveButton.onclick = async () => {
+    document.getElementById('mcp-save-btn').addEventListener('click', async () => {
+        const urlInput = document.getElementById('mcp-bridge-url');
         const newUrl = urlInput.value.trim();
+        
         if (!newUrl) {
             displayError('URL cannot be empty');
             return;
@@ -310,113 +454,43 @@ function showSettingsPanel() {
         
         try {
             await saveMCPBridgeURL(newUrl);
-            panel.remove();
-            document.querySelector('[data-mcp-extension-backdrop]')?.remove();
-            displayToast('Settings saved. Resyncing plugins...');
-            await syncMCPPlugins();
+            displayToast('URL saved successfully');
         } catch (error) {
-            displayError(`Failed to save settings: ${error.message}`);
+            displayError(`Failed to save URL: ${error.message}`);
         }
-    };
-    buttonContainer.appendChild(saveButton);
-    
-    panel.appendChild(buttonContainer);
-    
-    // Add backdrop
-    const backdrop = document.createElement('div');
-    backdrop.setAttribute('data-mcp-extension-backdrop', '');
-    backdrop.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0,0,0,0.5);
-        z-index: 9999;
-    `;
-    backdrop.onclick = (e) => {
-        if (e.target === backdrop) {
-            backdrop.remove();
-            panel.remove();
-        }
-    };
-    
-    document.body.appendChild(backdrop);
-    document.body.appendChild(panel);
-}
-
-// IMPROVED: Create settings button that's more visible and reliably injected
-function createSettingsButton() {
-    // Remove any existing button first
-    const existingButton = document.querySelector('[data-mcp-extension-settings-button]');
-    if (existingButton) existingButton.remove();
-    
-    const button = document.createElement('div'); // Using div instead of button for better styling control
-    button.setAttribute('data-mcp-extension-settings-button', '');
-    button.innerHTML = '⚙️'; // Using gear emoji
-    button.title = 'MCP Extension Settings';
-    button.style.cssText = `
-        position: fixed;
-        bottom: 80px;
-        left: 20px;
-        width: 50px;
-        height: 50px;
-        background: #007bff;
-        color: white;
-        border: none;
-        border-radius: 50%;
-        font-size: 28px;
-        cursor: pointer;
-        z-index: 9999999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.3);
-        user-select: none;
-        text-align: center;
-        line-height: 50px;
-    `;
-    
-    // Make sure it's clickable
-    button.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('MCP Extension: Settings button clicked');
-        showSettingsPanel();
     });
     
-    // Add to DOM
-    document.body.appendChild(button);
-    console.log('MCP Extension: Settings button created and added to DOM');
+    document.getElementById('mcp-sync-btn').addEventListener('click', () => {
+        syncMCPPlugins().catch(err => {
+            displayError(`Sync failed: ${err.message}`);
+        });
+    });
 }
 
-// Initialize the extension with improved DOM loading logic
+// Initialize the extension
 function initMCPExtension() {
     console.log('MCP Extension initializing...');
     
-    // Create the settings button immediately
-    createSettingsButton();
+    // Function to check for and add the tab
+    const addTabIfNeeded = () => {
+        if (!document.querySelector('[data-element-id="workspace-tab-mcp"]')) {
+            const tab = createMCPSettingsTab();
+            if (tab) {
+                console.log('MCP tab created successfully');
+            }
+        }
+    };
     
-    // Also try again when DOM is fully loaded to ensure it's visible
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('MCP Extension: DOM loaded, ensuring button exists');
-            createSettingsButton();
-        });
-    }
+    // Try to add the tab immediately
+    setTimeout(addTabIfNeeded, 1000);
     
-    // Sync plugins
+    // Then try periodically to ensure it stays after UI updates
+    setInterval(addTabIfNeeded, 2000);
+    
+    // Start syncing plugins
     syncMCPPlugins().catch(err => {
         displayError(`Initialization failed: ${err.message}`);
     });
-    
-    // Ensure button stays visible by periodically checking
-    setInterval(() => {
-        if (!document.querySelector('[data-mcp-extension-settings-button]')) {
-            console.log('MCP Extension: Settings button missing, recreating...');
-            createSettingsButton();
-        }
-    }, 5000);
 }
 
 // Start the extension
